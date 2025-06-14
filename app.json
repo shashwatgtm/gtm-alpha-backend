@@ -1,0 +1,33 @@
+{
+  "name": "GTM Alpha Backend",
+  "description": "Backend service for GTM Alpha Consultation that properly executes GTM consultations via Apify API",
+  "repository": "https://github.com/shashwatgtm/gtm-alpha-backend",
+  "logo": "https://avatars.githubusercontent.com/u/shashwatgtm",
+  "keywords": ["node", "express", "apify", "gtm", "consultation"],
+  "env": {
+    "APIFY_API_TOKEN": {
+      "description": "Your Apify API token for GTM Alpha Consultant actor",
+      "value": "apify_api_4mszz5eKTSbZNyPf7GMqGDIcoydYj64gY8mn"
+    },
+    "NODE_ENV": {
+      "description": "Node environment",
+      "value": "production"
+    },
+    "ALLOWED_ORIGINS": {
+      "description": "Allowed CORS origins",
+      "value": "https://shashwatgtm.github.io,https://gtm-alpha-backend.herokuapp.com"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "eco"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "stack": "heroku-22"
+}
