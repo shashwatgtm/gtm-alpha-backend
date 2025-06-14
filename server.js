@@ -3,7 +3,7 @@
 
 const express = require('express');
 const cors = require('cors');
-const { ApifyApi } = require('apify-client');
+const ApifyApi = require('apify-client');
 require('dotenv').config();
 
 const app = express();
@@ -48,7 +48,7 @@ app.post('/api/gtm-consultation', async (req, res) => {
             });
         }
 
-        // Prepare input data according to exact Apify actor schema
+        // Prepare input data exactly matching the Apify actor schema
         const inputData = {
             client_name: req.body.client_name,
             client_designation: req.body.client_designation || '',
@@ -60,194 +60,210 @@ app.post('/api/gtm-consultation', async (req, res) => {
             current_team_size: req.body.current_team_size || '',
             budget_range: req.body.budget_range || '',
             specific_focus: req.body.specific_focus || '',
-            confirm_new_consultation: req.body.confirm_new_consultation || true
+            confirm_new_consultation: req.body.confirm_new_consultation || false
         };
 
-        console.log('Prepared input for Apify actor:', JSON.stringify(inputData, null, 2));
+        console.log('Prepared input data for Apify actor:', JSON.stringify(inputData, null, 2));
 
-        // Call the GTM Alpha Consultant actor
-        const actorId = 'shashghosh/gtm-alpha-consultant';
-        
-        console.log(`Starting actor: ${actorId}`);
-        const run = await apifyClient.actor(actorId).call(inputData, {
-            timeout: 300, // 5 minutes timeout
+        // Call the Apify actor
+        console.log('Calling Apify actor: shashghosh/gtm-alpha-consultant');
+        const run = await apifyClient.actor('shashghosh/gtm-alpha-consultant').call(inputData, {
             memory: 256,
-            build: 'latest'
+            timeout: 600 // 10 minutes timeout
         });
 
-        console.log('Actor run completed:', run.id);
-        console.log('Run status:', run.status);
+        console.log('Apify actor run completed:', {
+            id: run.id,
+            status: run.status,
+            startedAt: run.startedAt,
+            finishedAt: run.finishedAt
+        });
 
+        // Check run status
         if (run.status === 'SUCCEEDED') {
-            // Get the generated HTML report
-            const keyValueStore = await apifyClient.keyValueStore(run.defaultKeyValueStoreId);
-            let htmlReport = null;
-            
+            // Get the results from the dataset
+            const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
+            console.log('Dataset items retrieved:', items.length);
+
+            // Try to get additional output from key-value store
+            let additionalData = null;
             try {
-                const reportRecord = await keyValueStore.getRecord('enhanced_consultation_report.html');
-                htmlReport = reportRecord ? reportRecord.value : null;
-            } catch (error) {
-                console.log('No HTML report found, checking for other output formats');
+                const outputRecord = await apifyClient.keyValueStore(run.defaultKeyValueStoreId).getRecord('OUTPUT');
+                if (outputRecord) {
+                    additionalData = outputRecord.value;
+                    console.log('Additional output retrieved from key-value store');
+                }
+            } catch (kvError) {
+                console.log('No additional output in key-value store:', kvError.message);
             }
 
-            // Get dataset results as fallback
-            const dataset = await apifyClient.dataset(run.defaultDatasetId);
-            const { items } = await dataset.listItems();
+            // Calculate duration
+            const duration = run.finishedAt ? 
+                new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime() : 
+                null;
 
+            // Prepare success response
             const response = {
                 success: true,
-                runId: run.id,
-                status: run.status,
-                client_name: inputData.client_name,
-                company_name: inputData.company_name,
-                reportUrl: htmlReport ? `https://api.apify.com/v2/key-value-stores/${run.defaultKeyValueStoreId}/records/enhanced_consultation_report.html` : null,
-                keyValueStoreId: run.defaultKeyValueStoreId,
-                datasetId: run.defaultDatasetId,
-                consoleUrl: `https://console.apify.com/view/runs/${run.id}`,
-                timestamp: new Date().toISOString(),
-                duration: run.stats?.durationMillis || 0,
-                usage: run.usage || {},
-                hasHtmlReport: !!htmlReport,
-                datasetItems: items.length
+                message: 'GTM consultation completed successfully',
+                data: {
+                    runId: run.id,
+                    status: run.status,
+                    startedAt: run.startedAt,
+                    finishedAt: run.finishedAt,
+                    duration: duration,
+                    results: items.length > 0 ? items[0] : null,
+                    additionalData: additionalData,
+                    consoleUrl: `https://console.apify.com/actors/runs/${run.id}`,
+                    datasetUrl: `https://console.apify.com/storage/datasets/${run.defaultDatasetId}`,
+                    keyValueStoreUrl: `https://console.apify.com/storage/key-value-stores/${run.defaultKeyValueStoreId}`
+                }
             };
 
-            console.log('GTM consultation completed successfully:', response);
+            console.log('Sending success response');
             res.json(response);
 
         } else if (run.status === 'FAILED') {
-            console.error('Actor run failed:', run.statusMessage);
+            console.error('Apify actor run failed:', run.statusMessage);
             res.status(500).json({
-                error: 'GTM consultation failed',
-                runId: run.id,
-                status: run.status,
-                message: run.statusMessage,
-                consoleUrl: `https://console.apify.com/view/runs/${run.id}`
+                success: false,
+                message: 'GTM consultation failed',
+                error: {
+                    runId: run.id,
+                    status: run.status,
+                    statusMessage: run.statusMessage,
+                    consoleUrl: `https://console.apify.com/actors/runs/${run.id}`
+                }
+            });
+
+        } else if (run.status === 'ABORTED') {
+            console.error('Apify actor run was aborted:', run.statusMessage);
+            res.status(500).json({
+                success: false,
+                message: 'GTM consultation was aborted',
+                error: {
+                    runId: run.id,
+                    status: run.status,
+                    statusMessage: run.statusMessage,
+                    consoleUrl: `https://console.apify.com/actors/runs/${run.id}`
+                }
+            });
+
+        } else if (run.status === 'TIMED-OUT') {
+            console.error('Apify actor run timed out:', run.statusMessage);
+            res.status(500).json({
+                success: false,
+                message: 'GTM consultation timed out',
+                error: {
+                    runId: run.id,
+                    status: run.status,
+                    statusMessage: run.statusMessage,
+                    consoleUrl: `https://console.apify.com/actors/runs/${run.id}`
+                }
             });
 
         } else {
-            console.log('Actor run completed with status:', run.status);
-            res.json({
+            console.error('Apify actor run in unexpected state:', run.status);
+            res.status(500).json({
                 success: false,
-                runId: run.id,
-                status: run.status,
-                message: run.statusMessage,
-                consoleUrl: `https://console.apify.com/view/runs/${run.id}`
+                message: 'GTM consultation completed with unexpected status',
+                error: {
+                    runId: run.id,
+                    status: run.status,
+                    statusMessage: run.statusMessage,
+                    consoleUrl: `https://console.apify.com/actors/runs/${run.id}`
+                }
             });
         }
 
     } catch (error) {
-        console.error('Error in GTM consultation:', error);
+        console.error('Error during GTM consultation:', error);
         
-        // Handle specific Apify errors
-        if (error.message && error.message.includes('UNDER_MAINTENANCE')) {
-            return res.status(503).json({
-                error: 'Service temporarily unavailable',
-                message: 'The GTM Alpha Consultant is currently under maintenance. Please try again later.',
-                code: 'UNDER_MAINTENANCE'
+        // Handle specific error types
+        if (error.message && error.message.includes('Actor not found')) {
+            res.status(404).json({
+                success: false,
+                message: 'GTM Alpha Consultant actor not found',
+                error: error.message
+            });
+        } else if (error.message && error.message.includes('UNDER_MAINTENANCE')) {
+            res.status(503).json({
+                success: false,
+                message: 'GTM Alpha Consultant is currently under maintenance',
+                error: 'UNDER_MAINTENANCE'
+            });
+        } else if (error.message && error.message.includes('Unauthorized')) {
+            res.status(401).json({
+                success: false,
+                message: 'Unauthorized access to Apify. Check API token.',
+                error: error.message
+            });
+        } else {
+            res.status(500).json({
+                success: false,
+                message: 'Internal server error during GTM consultation',
+                error: error.message
             });
         }
-
-        if (error.message && error.message.includes('not found')) {
-            return res.status(404).json({
-                error: 'Actor not found',
-                message: 'The GTM Alpha Consultant actor could not be found. Please contact support.',
-                code: 'ACTOR_NOT_FOUND'
-            });
-        }
-
-        res.status(500).json({
-            error: 'Internal server error',
-            message: 'An unexpected error occurred while processing your GTM consultation.',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
     }
 });
 
-// Get consultation result endpoint
-app.get('/api/consultation/:runId', async (req, res) => {
+// Endpoint to check specific actor status
+app.get('/api/actor-status', async (req, res) => {
     try {
-        const { runId } = req.params;
+        console.log('Checking GTM Alpha Consultant actor status');
+        const actor = await apifyClient.actor('shashghosh/gtm-alpha-consultant').get();
         
-        console.log(`Fetching consultation result for run: ${runId}`);
-        
-        // Get run details
-        const run = await apifyClient.run(runId).get();
-        
-        if (!run) {
-            return res.status(404).json({
-                error: 'Consultation not found',
-                message: 'The specified consultation run could not be found.'
-            });
-        }
-
-        // Get the HTML report if available
-        let htmlReport = null;
-        if (run.defaultKeyValueStoreId) {
-            try {
-                const keyValueStore = await apifyClient.keyValueStore(run.defaultKeyValueStoreId);
-                const reportRecord = await keyValueStore.getRecord('enhanced_consultation_report.html');
-                htmlReport = reportRecord ? reportRecord.value : null;
-            } catch (error) {
-                console.log('No HTML report found for run:', runId);
+        res.json({
+            success: true,
+            actor: {
+                id: actor.id,
+                name: actor.name,
+                username: actor.username,
+                description: actor.description,
+                isPublic: actor.isPublic,
+                createdAt: actor.createdAt,
+                modifiedAt: actor.modifiedAt,
+                stats: actor.stats,
+                taggedBuilds: actor.taggedBuilds
             }
-        }
-
-        const response = {
-            runId: run.id,
-            status: run.status,
-            startedAt: run.startedAt,
-            finishedAt: run.finishedAt,
-            duration: run.stats?.durationMillis || 0,
-            reportUrl: htmlReport ? `https://api.apify.com/v2/key-value-stores/${run.defaultKeyValueStoreId}/records/enhanced_consultation_report.html` : null,
-            keyValueStoreId: run.defaultKeyValueStoreId,
-            datasetId: run.defaultDatasetId,
-            consoleUrl: `https://console.apify.com/view/runs/${run.id}`,
-            hasHtmlReport: !!htmlReport
-        };
-
-        res.json(response);
-
+        });
     } catch (error) {
-        console.error('Error fetching consultation result:', error);
+        console.error('Error checking actor status:', error);
         res.status(500).json({
-            error: 'Error fetching consultation',
-            message: 'Could not retrieve the consultation result.'
+            success: false,
+            message: 'Error checking actor status',
+            error: error.message
         });
     }
 });
 
-// List recent consultations endpoint
-app.get('/api/consultations', async (req, res) => {
+// Endpoint to list recent runs of the GTM Alpha Consultant
+app.get('/api/recent-runs', async (req, res) => {
     try {
-        const limit = parseInt(req.query.limit) || 10;
-        
-        console.log('Fetching recent consultations, limit:', limit);
-        
-        // Get recent runs for the GTM Alpha Consultant actor
+        console.log('Fetching recent runs of GTM Alpha Consultant');
         const runs = await apifyClient.actor('shashghosh/gtm-alpha-consultant').runs().list({
-            limit,
+            limit: 10,
             desc: true
         });
-
-        const consultations = runs.items.map(run => ({
-            runId: run.id,
-            status: run.status,
-            startedAt: run.startedAt,
-            finishedAt: run.finishedAt,
-            duration: run.stats?.durationMillis || 0,
-            consoleUrl: `https://console.apify.com/view/runs/${run.id}`
-        }));
-
+        
         res.json({
-            total: runs.total,
-            consultations
+            success: true,
+            runs: runs.items.map(run => ({
+                id: run.id,
+                status: run.status,
+                startedAt: run.startedAt,
+                finishedAt: run.finishedAt,
+                statusMessage: run.statusMessage,
+                consoleUrl: `https://console.apify.com/actors/runs/${run.id}`
+            }))
         });
-
     } catch (error) {
-        console.error('Error fetching consultations:', error);
+        console.error('Error fetching recent runs:', error);
         res.status(500).json({
-            error: 'Error fetching consultations',
-            message: 'Could not retrieve recent consultations.'
+            success: false,
+            message: 'Error fetching recent runs',
+            error: error.message
         });
     }
 });
@@ -256,42 +272,37 @@ app.get('/api/consultations', async (req, res) => {
 app.use((error, req, res, next) => {
     console.error('Unhandled error:', error);
     res.status(500).json({
-        error: 'Internal server error',
-        message: 'An unexpected error occurred.'
+        success: false,
+        message: 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
     });
 });
 
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({
-        error: 'Endpoint not found',
-        message: 'The requested endpoint does not exist.'
+        success: false,
+        message: 'Endpoint not found',
+        availableEndpoints: [
+            'GET /health - Health check',
+            'POST /api/gtm-consultation - GTM consultation',
+            'GET /api/actor-status - Check actor status',
+            'GET /api/recent-runs - List recent runs'
+        ]
     });
 });
 
-// Start server
+// Start the server
 app.listen(port, () => {
-    console.log(`GTM Alpha Backend Service running on port ${port}`);
-    console.log(`Health check: http://localhost:${port}/health`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🚀 GTM Alpha Backend Server running on port ${port}`);
+    console.log(`📊 Health check: http://localhost:${port}/health`);
+    console.log(`🎯 GTM consultation: POST http://localhost:${port}/api/gtm-consultation`);
+    console.log(`📈 Actor status: GET http://localhost:${port}/api/actor-status`);
+    console.log(`📋 Recent runs: GET http://localhost:${port}/api/recent-runs`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔑 Apify token configured: ${process.env.APIFY_API_TOKEN ? 'Yes' : 'No'}`);
     
-    // Verify Apify token is configured
     if (!process.env.APIFY_API_TOKEN) {
-        console.warn('WARNING: APIFY_API_TOKEN not configured in environment variables');
-    } else {
-        console.log('Apify API token configured ✓');
+        console.warn('⚠️  WARNING: APIFY_API_TOKEN environment variable is not set!');
     }
 });
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
-    process.exit(0);
-});
-
-process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down gracefully');
-    process.exit(0);
-});
-
-module.exports = app;
