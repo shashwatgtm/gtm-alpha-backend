@@ -1,13 +1,13 @@
 const express = require('express');
 const cors = require('cors');
 
-// RAILWAY FIX: Import apify-client correctly for Railway's Node.js environment
-const ApifyApi = require('apify-client');
+// RAILWAY FIX: Use destructuring import for Node.js v22.11.0
+const { ApifyApi } = require('apify-client');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Initialize Apify client - this should work now
+// Initialize Apify client - this should work with destructuring
 const apifyClient = new ApifyApi({
     token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
 });
@@ -23,14 +23,14 @@ app.get('/health', (req, res) => {
     res.json({ 
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        version: '8.7-fixed-import',
+        version: '8.8-destructuring-fix',
         hasToken: !!(process.env.APIFY_API_TOKEN || 'fallback')
     });
 });
 
 app.get('/', (req, res) => {
     res.json({
-        message: 'GTM Alpha Backend v8.7 - Fixed Import',
+        message: 'GTM Alpha Backend v8.8 - Destructuring Fix',
         status: 'running'
     });
 });
@@ -122,8 +122,8 @@ app.post('/api/gtm-consultation', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`🚀 GTM Alpha Backend v8.7 running on port ${port}`);
-    console.log('✅ Full apify-client integration for complete HTML output');
+    console.log(`🚀 GTM Alpha Backend v8.8 running on port ${port}`);
+    console.log('✅ Full apify-client integration with destructuring import');
     console.log('🎯 Ready for GTM consultations with EPIC framework');
 });
 
