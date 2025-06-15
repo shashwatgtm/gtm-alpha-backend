@@ -1,12 +1,20 @@
 const express = require('express');
 const cors = require('cors');
-// FIXED: Use default import without destructuring
-const ApifyApi = require('apify-client').default || require('apify-client');
+
+// RAILWAY FIX: Use CommonJS require without destructuring
+let ApifyApi;
+try {
+    // Try default export first
+    ApifyApi = require('apify-client').default;
+} catch (e) {
+    // Fallback to direct require
+    ApifyApi = require('apify-client');
+}
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Initialize Apify client with WORKING constructor
+// Initialize with working constructor
 const apifyClient = new ApifyApi({
     token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
 });
@@ -18,28 +26,26 @@ app.use(cors({
 
 app.use(express.json());
 
-// Health check
 app.get('/health', (req, res) => {
     res.json({ 
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        version: '8.2-fixed',
-        hasToken: !!(process.env.APIFY_API_TOKEN || 'fallback')
+        version: '8.3-railway-fixed',
+        apifyClientReady: !!apifyClient
     });
 });
 
-// Root endpoint
 app.get('/', (req, res) => {
     res.json({
-        message: 'GTM Alpha Backend v8.2 - ApifyApi FIXED',
-        status: 'running'
+        message: 'GTM Alpha Backend v8.3 - Railway Compatible',
+        status: 'running',
+        apifyReady: !!apifyClient
     });
 });
 
-// GTM consultation endpoint
 app.post('/api/gtm-consultation', async (req, res) => {
     try {
-        console.log('GTM consultation request received');
+        console.log('GTM consultation request');
         
         if (!req.body.client_name || !req.body.company_name || !req.body.gtm_challenge) {
             return res.status(400).json({
@@ -105,8 +111,9 @@ app.post('/api/gtm-consultation', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`GTM Alpha Backend v8.2 running on port ${port}`);
-    console.log('ApifyApi constructor FIXED');
+    console.log(`GTM Alpha Backend v8.3 - Railway Compatible - Port ${port}`);
+    console.log('ApifyApi import method: Compatible fallback system');
+    console.log('Ready for GTM consultations');
 });
 
 module.exports = app;
