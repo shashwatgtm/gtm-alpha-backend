@@ -1,43 +1,18 @@
 const express = require('express');
 const cors = require('cors');
 
+// CORRECT IMPORT: It's ApifyClient, not ApifyApi!
+const { ApifyClient } = require('apify-client');
+
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Simple, direct import that should work
-let apifyClient;
-try {
-    // Try the most common working pattern first
-    const apifyClientConstructor = require('apify-client');
-    apifyClient = new apifyClientConstructor({
-        token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
-    });
-    console.log('✅ Apify client initialized with direct constructor');
-} catch (error) {
-    console.log('❌ Direct constructor failed, trying alternatives:', error.message);
-    try {
-        // Try named import
-        const { ApifyApi } = require('apify-client');
-        apifyClient = new ApifyApi({
-            token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
-        });
-        console.log('✅ Apify client initialized with named import');
-    } catch (error2) {
-        console.log('❌ Named import failed, trying default:', error2.message);
-        try {
-            // Try default import
-            const apifyModule = require('apify-client');
-            const ApifyApi = apifyModule.default || apifyModule;
-            apifyClient = new ApifyApi({
-                token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
-            });
-            console.log('✅ Apify client initialized with default import');
-        } catch (error3) {
-            console.error('❌ All import methods failed:', error3.message);
-            apifyClient = null;
-        }
-    }
-}
+// Initialize Apify client with the CORRECT class name
+const apifyClient = new ApifyClient({
+    token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
+});
+
+console.log('✅ Apify client initialized successfully with ApifyClient');
 
 app.use(cors({
     origin: ['https://shashwatgtm.github.io', 'http://localhost:3000'],
@@ -50,32 +25,24 @@ app.get('/health', (req, res) => {
     res.json({ 
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        version: '9.1-simple-fix',
+        version: '10.0-correct-import',
         hasToken: !!(process.env.APIFY_API_TOKEN || 'fallback'),
-        apifyClientReady: !!apifyClient
+        apifyClientReady: true,
+        importUsed: 'ApifyClient (CORRECT)'
     });
 });
 
 app.get('/', (req, res) => {
     res.json({
-        message: 'GTM Alpha Backend v9.1 - Simple Import Fix',
+        message: 'GTM Alpha Backend v10.0 - CORRECT ApifyClient Import',
         status: 'running',
-        apifyClientStatus: apifyClient ? 'initialized' : 'failed to initialize'
+        apifyClientStatus: 'initialized correctly'
     });
 });
 
 app.post('/api/gtm-consultation', async (req, res) => {
     try {
-        console.log('GTM consultation request received');
-        
-        if (!apifyClient) {
-            console.error('Apify client not available - cannot process consultation');
-            return res.status(500).json({
-                success: false,
-                message: 'Apify service unavailable - server configuration issue',
-                error: 'Apify client failed to initialize'
-            });
-        }
+        console.log('🚀 GTM consultation request received');
         
         if (!req.body.client_name || !req.body.company_name || !req.body.gtm_challenge) {
             return res.status(400).json({
@@ -98,10 +65,10 @@ app.post('/api/gtm-consultation', async (req, res) => {
             confirm_new_consultation: true
         };
 
-        console.log('🚀 Calling GTM Alpha Consultant actor wiDXIHsc6oqnpeER2');
-        console.log('📝 Input data:', JSON.stringify(inputData, null, 2));
+        console.log('📝 Calling GTM Alpha Consultant actor wiDXIHsc6oqnpeER2');
+        console.log('🎯 Input data:', JSON.stringify(inputData, null, 2));
 
-        // Call the actor
+        // Call the actor - this should work now with correct ApifyClient
         const run = await apifyClient.actor('wiDXIHsc6oqnpeER2').call(inputData, {
             timeout: 360,
             memory: 256
@@ -168,11 +135,8 @@ app.post('/api/gtm-consultation', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`🚀 GTM Alpha Backend v9.1 running on port ${port}`);
-    console.log(`✅ Apify client status: ${apifyClient ? 'ready' : 'failed'}`);
-    if (!apifyClient) {
-        console.error('⚠️  WARNING: Apify client failed to initialize - consultations will not work');
-    }
+    console.log(`🚀 GTM Alpha Backend v10.0 running on port ${port}`);
+    console.log('✅ ApifyClient initialized correctly (not ApifyApi!)');
     console.log('🎯 Ready for GTM consultations with EPIC framework');
     console.log(`🌐 Health check: http://localhost:${port}/health`);
 });
