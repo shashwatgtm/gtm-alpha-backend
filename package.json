@@ -1,23 +1,13 @@
 {
   "name": "gtm-alpha-backend",
-  "version": "8.0.0",
-  "description": "Railway-deployed backend service for GTM Alpha Consultation",
+  "version": "8.3.0",
+  "description": "Railway-deployed backend service for GTM Alpha Consultation - FORCE REDEPLOY",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "build": "echo 'No build step required for Railway'",
-    "railway:start": "node server.js"
+    "dev": "node server.js"
   },
-  "keywords": [
-    "gtm",
-    "consultation",
-    "apify",
-    "backend",
-    "api",
-    "railway",
-    "shashwat-ghosh"
-  ],
+  "keywords": ["gtm", "consultation", "apify", "railway"],
   "author": "Shashwat Ghosh <shashwat@gtmhelix.com>",
   "license": "MIT",
   "dependencies": {
@@ -26,15 +16,6 @@
     "apify-client": "^2.12.5"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=8.0.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/shashwatgtm/gtm-alpha-backend.git"
-  },
-  "bugs": {
-    "url": "https://github.com/shashwatgtm/gtm-alpha-backend/issues"
-  },
-  "homepage": "https://github.com/shashwatgtm/gtm-alpha-backend#readme"
+    "node": ">=18.0.0"
+  }
 }
