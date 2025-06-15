@@ -4,42 +4,38 @@ const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Railway Node.js v22 compatibility fix - dynamic import
+// Simple, direct import that should work
 let apifyClient;
-
-async function initializeApifyClient() {
+try {
+    // Try the most common working pattern first
+    const apifyClientConstructor = require('apify-client');
+    apifyClient = new apifyClientConstructor({
+        token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
+    });
+    console.log('✅ Apify client initialized with direct constructor');
+} catch (error) {
+    console.log('❌ Direct constructor failed, trying alternatives:', error.message);
     try {
-        // Try multiple import methods for Railway Node.js v22 compatibility
-        const apifyModule = require('apify-client');
-        
-        // Check if it's a default export
-        if (apifyModule.default) {
-            const ApifyApi = apifyModule.default;
+        // Try named import
+        const { ApifyApi } = require('apify-client');
+        apifyClient = new ApifyApi({
+            token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
+        });
+        console.log('✅ Apify client initialized with named import');
+    } catch (error2) {
+        console.log('❌ Named import failed, trying default:', error2.message);
+        try {
+            // Try default import
+            const apifyModule = require('apify-client');
+            const ApifyApi = apifyModule.default || apifyModule;
             apifyClient = new ApifyApi({
                 token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
             });
-        } 
-        // Check if it's a named export
-        else if (apifyModule.ApifyApi) {
-            apifyClient = new apifyModule.ApifyApi({
-                token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
-            });
+            console.log('✅ Apify client initialized with default import');
+        } catch (error3) {
+            console.error('❌ All import methods failed:', error3.message);
+            apifyClient = null;
         }
-        // Check if it's the constructor itself
-        else if (typeof apifyModule === 'function') {
-            apifyClient = new apifyModule({
-                token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
-            });
-        }
-        else {
-            throw new Error('Could not find ApifyApi constructor in module');
-        }
-        
-        console.log('✅ Apify client initialized successfully');
-        return true;
-    } catch (error) {
-        console.error('❌ Failed to initialize Apify client:', error);
-        return false;
     }
 }
 
@@ -54,7 +50,7 @@ app.get('/health', (req, res) => {
     res.json({ 
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        version: '9.0-dynamic-import',
+        version: '9.1-simple-fix',
         hasToken: !!(process.env.APIFY_API_TOKEN || 'fallback'),
         apifyClientReady: !!apifyClient
     });
@@ -62,9 +58,9 @@ app.get('/health', (req, res) => {
 
 app.get('/', (req, res) => {
     res.json({
-        message: 'GTM Alpha Backend v9.0 - Dynamic Import Fix',
+        message: 'GTM Alpha Backend v9.1 - Simple Import Fix',
         status: 'running',
-        apifyClientStatus: apifyClient ? 'initialized' : 'not initialized'
+        apifyClientStatus: apifyClient ? 'initialized' : 'failed to initialize'
     });
 });
 
@@ -73,10 +69,11 @@ app.post('/api/gtm-consultation', async (req, res) => {
         console.log('GTM consultation request received');
         
         if (!apifyClient) {
+            console.error('Apify client not available - cannot process consultation');
             return res.status(500).json({
                 success: false,
-                message: 'Apify client not initialized',
-                error: 'Server startup issue'
+                message: 'Apify service unavailable - server configuration issue',
+                error: 'Apify client failed to initialize'
             });
         }
         
@@ -101,22 +98,27 @@ app.post('/api/gtm-consultation', async (req, res) => {
             confirm_new_consultation: true
         };
 
-        console.log('Calling GTM Alpha Consultant actor with data:', inputData);
+        console.log('🚀 Calling GTM Alpha Consultant actor wiDXIHsc6oqnpeER2');
+        console.log('📝 Input data:', JSON.stringify(inputData, null, 2));
 
-        // Use full apify-client for complete HTML output
+        // Call the actor
         const run = await apifyClient.actor('wiDXIHsc6oqnpeER2').call(inputData, {
             timeout: 360,
             memory: 256
         });
 
-        console.log('Actor run completed:', run.status);
+        console.log('✅ Actor run completed with status:', run.status);
+        console.log('🔗 Run ID:', run.id);
 
         if (run.status === 'SUCCEEDED') {
-            // Get the full dataset with HTML output
+            // Get the dataset results
             const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
+            
+            console.log(`📊 Dataset contains ${items.length} items`);
             
             if (items && items.length > 0) {
                 const consultation = items[0];
+                console.log('📋 Consultation data retrieved successfully');
                 
                 res.json({
                     success: true,
@@ -135,6 +137,7 @@ app.post('/api/gtm-consultation', async (req, res) => {
                     timestamp: new Date().toISOString()
                 });
             } else {
+                console.warn('⚠️ No consultation data in dataset');
                 res.status(500).json({
                     success: false,
                     message: 'No consultation data generated',
@@ -143,6 +146,7 @@ app.post('/api/gtm-consultation', async (req, res) => {
                 });
             }
         } else {
+            console.error('❌ Actor run failed with status:', run.status);
             res.status(500).json({
                 success: false,
                 message: `Actor run failed: ${run.status}`,
@@ -153,30 +157,24 @@ app.post('/api/gtm-consultation', async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in GTM consultation:', error);
+        console.error('💥 Error in GTM consultation:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
-            error: error.message
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });
 
-// Initialize server
-async function startServer() {
-    const apifyReady = await initializeApifyClient();
-    
-    app.listen(port, () => {
-        console.log(`🚀 GTM Alpha Backend v9.0 running on port ${port}`);
-        console.log(`✅ Apify client status: ${apifyReady ? 'ready' : 'failed'}`);
-        console.log('🎯 Ready for GTM consultations with EPIC framework');
-        console.log(`🌐 Health check: http://localhost:${port}/health`);
-    });
-}
-
-startServer().catch(error => {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
+app.listen(port, () => {
+    console.log(`🚀 GTM Alpha Backend v9.1 running on port ${port}`);
+    console.log(`✅ Apify client status: ${apifyClient ? 'ready' : 'failed'}`);
+    if (!apifyClient) {
+        console.error('⚠️  WARNING: Apify client failed to initialize - consultations will not work');
+    }
+    console.log('🎯 Ready for GTM consultations with EPIC framework');
+    console.log(`🌐 Health check: http://localhost:${port}/health`);
 });
 
 module.exports = app;
