@@ -1,20 +1,13 @@
 const express = require('express');
 const cors = require('cors');
 
-// RAILWAY FIX: Use CommonJS require without destructuring
-let ApifyApi;
-try {
-    // Try default export first
-    ApifyApi = require('apify-client').default;
-} catch (e) {
-    // Fallback to direct require
-    ApifyApi = require('apify-client');
-}
+// RAILWAY FIX: Import apify-client correctly for Railway's Node.js environment
+const ApifyApi = require('apify-client');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Initialize with working constructor
+// Initialize Apify client - this should work now
 const apifyClient = new ApifyApi({
     token: process.env.APIFY_API_TOKEN || 'apify_api_DFgcaQdaxQGQVd2mB6jz7q7GIiJQ1w2jUfb3',
 });
@@ -30,22 +23,21 @@ app.get('/health', (req, res) => {
     res.json({ 
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        version: '8.3-railway-fixed',
-        apifyClientReady: !!apifyClient
+        version: '8.7-fixed-import',
+        hasToken: !!(process.env.APIFY_API_TOKEN || 'fallback')
     });
 });
 
 app.get('/', (req, res) => {
     res.json({
-        message: 'GTM Alpha Backend v8.3 - Railway Compatible',
-        status: 'running',
-        apifyReady: !!apifyClient
+        message: 'GTM Alpha Backend v8.7 - Fixed Import',
+        status: 'running'
     });
 });
 
 app.post('/api/gtm-consultation', async (req, res) => {
     try {
-        console.log('GTM consultation request');
+        console.log('GTM consultation request received');
         
         if (!req.body.client_name || !req.body.company_name || !req.body.gtm_challenge) {
             return res.status(400).json({
@@ -68,35 +60,54 @@ app.post('/api/gtm-consultation', async (req, res) => {
             confirm_new_consultation: true
         };
 
-        console.log('Calling actor wiDXIHsc6oqnpeER2');
+        console.log('Calling actor wiDXIHsc6oqnpeER2 with full apify-client');
 
+        // Use full apify-client for complete HTML output
         const run = await apifyClient.actor('wiDXIHsc6oqnpeER2').call(inputData, {
             timeout: 360,
             memory: 256
         });
 
+        console.log('Actor run completed:', run.status);
+
         if (run.status === 'SUCCEEDED') {
+            // Get the full dataset with HTML output
             const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
             
             if (items && items.length > 0) {
                 const consultation = items[0];
+                
                 res.json({
                     success: true,
                     runId: run.id,
-                    data: consultation,
-                    consoleUrl: `https://console.apify.com/view/runs/${run.id}`
+                    status: run.status,
+                    data: {
+                        consultation_id: consultation.consultation_id,
+                        report_url: consultation.report_url,
+                        primary_focus: consultation.primary_epic_focus,
+                        epic_scores: consultation.epic_scores,
+                        consultation_output: consultation.consultation_output,
+                        timestamp: consultation.timestamp
+                    },
+                    consoleUrl: `https://console.apify.com/view/runs/${run.id}`,
+                    datasetUrl: `https://console.apify.com/storage/datasets/${run.defaultDatasetId}`,
+                    timestamp: new Date().toISOString()
                 });
             } else {
                 res.status(500).json({
                     success: false,
-                    message: 'No consultation data generated'
+                    message: 'No consultation data generated',
+                    runId: run.id,
+                    consoleUrl: `https://console.apify.com/view/runs/${run.id}`
                 });
             }
         } else {
             res.status(500).json({
                 success: false,
                 message: `Actor run failed: ${run.status}`,
-                error: run.statusMessage
+                error: run.statusMessage,
+                runId: run.id,
+                consoleUrl: `https://console.apify.com/view/runs/${run.id}`
             });
         }
 
@@ -111,9 +122,9 @@ app.post('/api/gtm-consultation', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`GTM Alpha Backend v8.3 - Railway Compatible - Port ${port}`);
-    console.log('ApifyApi import method: Compatible fallback system');
-    console.log('Ready for GTM consultations');
+    console.log(`🚀 GTM Alpha Backend v8.7 running on port ${port}`);
+    console.log('✅ Full apify-client integration for complete HTML output');
+    console.log('🎯 Ready for GTM consultations with EPIC framework');
 });
 
 module.exports = app;
